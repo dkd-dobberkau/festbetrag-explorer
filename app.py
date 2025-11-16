@@ -352,20 +352,21 @@ def main():
                     st.session_state.watchlist = []
                     st.rerun()
 
-            # Upload watchlist
-            st.markdown("---")
-            uploaded_watchlist = st.file_uploader("📤 Merkliste laden", type="json", key="watchlist_upload")
-            if uploaded_watchlist is not None:
-                try:
-                    content = uploaded_watchlist.read().decode()
-                    # Store in session state to load on next rerun
-                    st.session_state.uploaded_watchlist_data = content
-                    st.success("✅ Merkliste wird geladen...")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Fehler beim Laden: {e}")
         else:
             st.info("Keine Medikamente in der Merkliste")
+
+        # Upload watchlist (always visible)
+        st.markdown("---")
+        uploaded_watchlist = st.file_uploader("📤 Merkliste laden", type="json", key="watchlist_upload")
+        if uploaded_watchlist is not None:
+            try:
+                content = uploaded_watchlist.read().decode()
+                # Store in session state to load on next rerun
+                st.session_state.uploaded_watchlist_data = content
+                st.success("✅ Merkliste wird geladen...")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Fehler beim Laden: {e}")
 
         st.markdown("---")
 
@@ -397,32 +398,32 @@ def main():
         - 🔴 Positiv: Über Festbetrag (Zuzahlung nötig)
         """)
 
-    # Check if searching from watchlist
+    # Search box with inline autocomplete (always visible)
+    selected_value = st_searchbox(
+        search_function,
+        placeholder="🔎 PZN, Medikamentenname oder Wirkstoff eingeben...",
+        label="Medikament suchen",
+        clear_on_submit=False,
+        key="medication_searchbox"
+    )
+
+    # Determine search query
     search_query = None
+
+    # Check if searching from watchlist
     if 'selected_watchlist_pzn' in st.session_state and st.session_state.selected_watchlist_pzn:
         # Search triggered from watchlist - use PZN directly
         search_query = st.session_state.selected_watchlist_pzn
         # Clear the trigger
         st.session_state.selected_watchlist_pzn = None
-    else:
-        # Normal search box with inline autocomplete
-        selected_value = st_searchbox(
-            search_function,
-            placeholder="🔎 PZN, Medikamentenname oder Wirkstoff eingeben...",
-            label="Medikament suchen",
-            clear_on_submit=False,
-            key="medication_searchbox"
-        )
-
-        # Extract search query from selected value
-        if selected_value:
-            # Extract the actual search term from the suggestion
-            if " - " in selected_value:  # PZN format
-                search_query = selected_value.split(" - ")[0]
-            elif " (" in selected_value:  # Name format
-                search_query = selected_value.split(" (")[0]
-            else:  # Wirkstoff or direct input
-                search_query = selected_value
+    elif selected_value:
+        # Extract search query from searchbox value
+        if " - " in selected_value:  # PZN format
+            search_query = selected_value.split(" - ")[0]
+        elif " (" in selected_value:  # Name format
+            search_query = selected_value.split(" (")[0]
+        else:  # Wirkstoff or direct input
+            search_query = selected_value
 
     if search_query:
         with st.spinner("Suche läuft..."):
