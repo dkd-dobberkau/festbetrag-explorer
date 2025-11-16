@@ -27,3 +27,9 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Documentation downloads
+docs/*.pdf
+docs/*.zip
+docs/*.csv
+docs/*.txt

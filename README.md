@@ -1,20 +1,25 @@
 # 💊 Festbetrag Explorer
 
-Eine einfache Streamlit-App zum Suchen und Vergleichen von Medikamentenpreisen basierend auf der deutschen Festbetragsliste.
+Eine einfache Streamlit-App zum Suchen und Vergleichen von Medikamentenpreisen basierend auf der deutschen Festbetragsliste und Zuzahlungsbefreiungsliste.
 
 ## 🎯 Features
 
-- 🔍 **Schnelle Suche** nach PZN, Medikamentenname oder Wirkstoff
+- 🔍 **Autovervollständigung** - Inline-Suche mit Live-Vorschlägen
+- 💊 **Schnelle Suche** nach PZN, Medikamentenname oder Wirkstoff
 - 💰 **Preisvergleich** mit Festbetrag-Anzeige
-- 🔄 **Alternative Medikamente** finden
+- 🔄 **Alternative Medikamente** finden in gleicher Festbetragsgruppe
 - 📊 **Statistiken** zu Preisen und Einsparpotenzial
 - 🎨 **Farbcodierung**: Grün (unter Festbetrag), Rot (über Festbetrag)
+- 🆓 **Zuzahlungsbefreiung** - Import von GKV-Spitzenverband Daten
 
 ## 🚀 Installation
 
 ### Voraussetzungen
 - Python 3.8+
 - pip
+- `pdftotext` (für PDF-Import von Zuzahlungsbefreiungsliste)
+  - **macOS**: `brew install poppler`
+  - **Linux**: `apt-get install poppler-utils`
 
 ### Setup
 
@@ -31,7 +36,13 @@ pip install -r requirements.txt
 
 3. Datenbank einrichten (siehe unten)
 
-4. App starten:
+4. (Optional) Zuzahlungsbefreiungsliste herunterladen:
+```bash
+python scripts/download_data.py
+python scripts/import_zuzahlungsbefreit.py
+```
+
+5. App starten:
 ```bash
 streamlit run app.py
 ```
@@ -61,9 +72,9 @@ python scripts/import_csv.py /pfad/zur/festbetragsliste.csv
 
 ```sql
 CREATE TABLE medications (
-    id INTEGER PRIMARY KEY,
-    pzn TEXT UNIQUE,
-    arzneimittelname TEXT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stufe TEXT,
+    festbetragsgruppe TEXT,
     wirkstoff TEXT,
     wirkstoffmenge_1 REAL,
     wirkstoffmenge_2 REAL,
@@ -72,16 +83,25 @@ CREATE TABLE medications (
     preis REAL,
     festbetrag REAL,
     differenz REAL,  -- preis - festbetrag
-    festbetragsgruppe TEXT,
-    stufe TEXT,
-    stand_datum TEXT
+    arzneimittelname TEXT,
+    pzn TEXT,
+    stand_datum TEXT,
+    zuzahlungsbefreit INTEGER DEFAULT 0,  -- 0 = nein, 1 = ja
+    UNIQUE(pzn, packungsgroesse, darreichungsform)
 );
+
+-- Wichtige Indizes für Performance
+CREATE INDEX idx_pzn ON medications(pzn);
+CREATE INDEX idx_wirkstoff ON medications(wirkstoff);
+CREATE INDEX idx_festbetragsgruppe ON medications(festbetragsgruppe);
+CREATE INDEX idx_arzneimittelname ON medications(arzneimittelname);
+CREATE INDEX idx_zuzahlungsbefreit ON medications(zuzahlungsbefreit);
 ```
 
 ### CSV-Format
 
 Ihre CSV-Datei sollte mindestens folgende Spalten enthalten:
-- `PZN`
+- `PZN` - Pharmazentralnummer (7-stellig)
 - `Arzneimittelname`
 - `Wirkstoff`
 - `Packungsgroesse`
@@ -89,12 +109,71 @@ Ihre CSV-Datei sollte mindestens folgende Spalten enthalten:
 - `Festbetrag`
 - `Darreichungsform`
 
+## 🆓 Zuzahlungsbefreiung importieren
+
+Die App kann die offizielle Liste zuzahlungsbefreiter Arzneimittel vom GKV-Spitzenverband importieren.
+
+### Schritt 1: PDF herunterladen
+
+```bash
+python scripts/download_data.py
+```
+
+Dies lädt die aktuelle Zuzahlungsbefreiungsliste als PDF herunter (ca. 1-2 MB).
+
+### Schritt 2: PDF zu CSV konvertieren und DB aktualisieren
+
+```bash
+# Kompletter Import (PDF → TXT → CSV → Datenbank)
+python scripts/import_zuzahlungsbefreit.py
+
+# Oder nur CSV generieren (ohne DB-Update)
+python scripts/import_zuzahlungsbefreit.py --csv-only
+
+# Mit eigenem PDF
+python scripts/import_zuzahlungsbefreit.py docs/MeinPDF.pdf
+
+# Alle Flags zurücksetzen vor Import
+python scripts/import_zuzahlungsbefreit.py --reset-all
+```
+
+### Was passiert beim Import?
+
+1. **PDF → Text**: `pdftotext -layout -enc UTF-8` extrahiert Text
+2. **Text → CSV**: Parser extrahiert PZN, Name, Preis
+3. **CSV → Datenbank**: Medikamente werden auf `zuzahlungsbefreit = 1` gesetzt
+
+**Generierte Dateien** (alle in `docs/`, gitignored):
+- `*.txt` - Extrahierter Text
+- `*.csv` - Strukturierte Daten
+- `*.pdf` - Heruntergeladenes PDF
+
 ## 💡 Verwendung
 
-1. **Suchen**: Geben Sie PZN, Medikamentenname oder Wirkstoff ein
-2. **Filtern**: Wählen Sie in der Sidebar die Suchart
-3. **Vergleichen**: Sehen Sie alle Preise sortiert
-4. **Alternativen finden**: Wählen Sie ein Medikament für günstigere Optionen
+### Suche mit Autovervollständigung
+
+1. **Tippen Sie mindestens 2 Zeichen** in das Suchfeld
+2. **Inline-Vorschläge erscheinen** automatisch während der Eingabe
+3. **Wählen Sie einen Vorschlag** mit Maus oder Pfeiltasten
+4. **Ergebnisse werden sofort angezeigt**
+
+### Suchoptionen (Sidebar)
+
+- **Alles**: Sucht in PZN, Name und Wirkstoff
+- **PZN**: Nur Pharmazentralnummer (7-stellig)
+- **Medikamentenname**: Nach Handelsnamen suchen
+- **Wirkstoff**: Nach Wirkstoff/Active Ingredient suchen
+
+### Alternative Medikamente finden
+
+1. Führen Sie eine Suche durch
+2. Scrollen Sie zu "Günstigere Alternativen finden"
+3. Wählen Sie ein Medikament aus der Dropdown-Liste
+4. Sehen Sie **alle Medikamente in der gleichen Festbetragsgruppe** mit:
+   - Gleichem Wirkstoff und Wirkstoffmenge
+   - Gleicher Packungsgröße
+   - Gleicher Darreichungsform
+5. **Einsparpotenzial** wird automatisch berechnet
 
 ### Interpretation der Ergebnisse
 
@@ -102,24 +181,40 @@ Ihre CSV-Datei sollte mindestens folgende Spalten enthalten:
 - **Preis**: Tatsächlicher Apothekenpreis
 - **Differenz**:
   - 🟢 **Negativ**: Medikament kostet weniger als Festbetrag → voll erstattet
-  - 🔴 **Positiv**: Medikament kostet mehr als Festbetrag → Zuzahlung erforderlich
+  - 🔴 **Positiv**: Medikament kostet mehr als Festbetrag → Patient zahlt Differenz
   - 🟡 **Null**: Medikament kostet genau Festbetrag
+- **Zuzahlungsbefreit**: Keine gesetzliche Zuzahlung (5-10€) erforderlich
+
+### Was bedeutet "Zuzahlungsbefreit"?
+
+Ein Medikament ist zuzahlungsbefreit, wenn:
+- Der Preis **mindestens 30% unter** dem Festbetrag liegt
+- Der Hersteller eine Vereinbarung mit dem GKV-Spitzenverband hat
+
+**Vorteil**: Patient zahlt **keine** Zuzahlung (normalerweise 5-10€ pro Packung)
 
 ## 📁 Projektstruktur
 
 ```
 festbetrag-explorer/
-├── app.py                 # Haupt-Streamlit-App
-├── requirements.txt       # Python Dependencies
-├── README.md             # Diese Datei
-├── LICENSE               # MIT License
-├── data/                 # Datenbank-Verzeichnis
+├── app.py                          # Haupt-Streamlit-App mit Autovervollständigung
+├── requirements.txt                # Python Dependencies
+├── README.md                       # Diese Datei
+├── CLAUDE.md                       # Entwickler-Dokumentation
+├── LICENSE                         # MIT License
+├── data/                           # Datenbank-Verzeichnis
 │   ├── .gitkeep
-│   └── festbetrag.db    # Ihre Datenbank (nicht im Repo)
-├── scripts/             # Hilfs-Scripts
-│   └── import_csv.py    # CSV-Import-Script
-└── utils/               # Utility-Funktionen
-    └── db_handler.py    # Datenbank-Helper
+│   └── festbetrag.db              # SQLite-Datenbank (nicht im Repo)
+├── docs/                           # Dokumentation & Downloads (gitignored)
+│   ├── README.md                  # TLDR zu Festbeträgen & Zuzahlungsbefreiung
+│   ├── .gitkeep
+│   ├── *.pdf                      # GKV-PDFs (gitignored)
+│   ├── *.txt                      # Extrahierte Texte (gitignored)
+│   └── *.csv                      # Generierte CSVs (gitignored)
+├── scripts/                        # Utility-Scripts
+│   ├── download_data.py           # GKV-PDF Downloader
+│   └── import_zuzahlungsbefreit.py # PDF→CSV→DB Importer
+└── utils/                          # Utility-Funktionen (leer)
 ```
 
 ## 🔒 Datenschutz
@@ -135,10 +230,22 @@ Diese App dient nur zu Informationszwecken. Sie ersetzt nicht die medizinische o
 - Die Preise können abweichen und veraltet sein
 - Medizinische Entscheidungen sollten immer mit medizinischem Fachpersonal getroffen werden
 
-## 📜 Datenquelle
+## 📜 Datenquellen
 
-Die Festbetragsliste wird vom GKV-Spitzenverband veröffentlicht:
-https://www.gkv-spitzenverband.de/
+### Festbeträge und Festbetragsgruppen
+- **BfArM (Bundesinstitut für Arzneimittel und Medizinprodukte)**
+  - https://www.bfarm.de/DE/Arzneimittel/Arzneimittelinformationen/Festbetraege-und-Zuzahlungen/_node.html
+
+### Zuzahlungsbefreite Arzneimittel
+- **GKV-Spitzenverband - Befreiungsliste Übersicht**
+  - https://www.gkv-spitzenverband.de/service/befreiungsliste_arzneimittel/befreiungsliste_arzneimittel.jsp
+
+- **GKV-Spitzenverband - Aktuelle PDF-Liste (sortiert nach Name)**
+  - https://www.gkv-spitzenverband.de/media/dokumente/service_1/zuzahlung_und_befreiung/zuzahlungsbefreite_arzneimittel_nach_name/Zuzahlungsbefreit_sort_Name_251101.pdf
+  - Wird monatlich aktualisiert
+
+### Weitere Informationen
+- **docs/README.md** - Ausführliches TLDR zu Festbeträgen und Zuzahlungsbefreiung
 
 ## 📄 Lizenz
 

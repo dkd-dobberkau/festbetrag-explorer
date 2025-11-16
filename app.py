@@ -9,6 +9,7 @@ import pandas as pd
 import sqlite3
 from pathlib import Path
 import os
+from streamlit_searchbox import st_searchbox
 
 # Page config
 st.set_page_config(
@@ -103,6 +104,62 @@ def search_medications(query, search_type="all", limit=50):
     return df
 
 
+def search_function(searchterm: str):
+    """Searchbox callback function that returns suggestions."""
+    if not searchterm or len(searchterm) < 2:
+        return []
+
+    # Get search type from session state
+    search_type = st.session_state.get('search_type', 'all')
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        if search_type == "pzn":
+            cursor.execute("""
+                SELECT DISTINCT pzn || ' - ' || arzneimittelname as suggestion
+                FROM medications
+                WHERE pzn LIKE ?
+                ORDER BY pzn ASC
+                LIMIT 15
+            """, (f'{searchterm}%',))
+        elif search_type == "name":
+            cursor.execute("""
+                SELECT DISTINCT arzneimittelname || ' (' || wirkstoff || ')' as suggestion
+                FROM medications
+                WHERE arzneimittelname LIKE ?
+                ORDER BY arzneimittelname ASC
+                LIMIT 15
+            """, (f'%{searchterm.upper()}%',))
+        elif search_type == "wirkstoff":
+            cursor.execute("""
+                SELECT DISTINCT wirkstoff as suggestion
+                FROM medications
+                WHERE wirkstoff LIKE ?
+                ORDER BY wirkstoff ASC
+                LIMIT 15
+            """, (f'%{searchterm}%',))
+        else:  # all
+            cursor.execute("""
+                SELECT DISTINCT
+                    CASE
+                        WHEN pzn LIKE ? THEN pzn || ' - ' || arzneimittelname
+                        WHEN arzneimittelname LIKE ? THEN arzneimittelname || ' (' || wirkstoff || ')'
+                        ELSE wirkstoff
+                    END as suggestion
+                FROM medications
+                WHERE pzn LIKE ? OR arzneimittelname LIKE ? OR wirkstoff LIKE ?
+                ORDER BY suggestion ASC
+                LIMIT 15
+            """, (f'{searchterm}%', f'%{searchterm.upper()}%', f'{searchterm}%', f'%{searchterm.upper()}%', f'%{searchterm}%'))
+
+        results = [row[0] for row in cursor.fetchall()]
+        return results
+    finally:
+        conn.close()
+
+
 def get_alternatives(pzn):
     """Get cheaper alternatives for a medication."""
     conn = sqlite3.connect(DB_PATH)
@@ -163,7 +220,8 @@ def main():
                 "pzn": "PZN",
                 "name": "Medikamentenname",
                 "wirkstoff": "Wirkstoff"
-            }[x]
+            }[x],
+            key="search_type"
         )
 
         limit = st.slider("Max. Ergebnisse", 10, 200, 50)
@@ -178,11 +236,25 @@ def main():
         - 🔴 Positiv: Über Festbetrag (Zuzahlung nötig)
         """)
 
-    # Search box
-    search_query = st.text_input(
-        "🔎 Medikament suchen",
-        placeholder="PZN, Medikamentenname oder Wirkstoff eingeben..."
+    # Search box with inline autocomplete
+    selected_value = st_searchbox(
+        search_function,
+        placeholder="🔎 PZN, Medikamentenname oder Wirkstoff eingeben...",
+        label="Medikament suchen",
+        clear_on_submit=False,
+        key="medication_searchbox"
     )
+
+    # Extract search query from selected value
+    search_query = None
+    if selected_value:
+        # Extract the actual search term from the suggestion
+        if " - " in selected_value:  # PZN format
+            search_query = selected_value.split(" - ")[0]
+        elif " (" in selected_value:  # Name format
+            search_query = selected_value.split(" (")[0]
+        else:  # Wirkstoff or direct input
+            search_query = selected_value
 
     if search_query:
         with st.spinner("Suche läuft..."):
@@ -215,7 +287,7 @@ def main():
                     return 'background-color: #fff3cd'  # yellow
 
             # Format dataframe
-            styled_df = df.style.applymap(
+            styled_df = df.style.map(
                 color_differenz,
                 subset=['differenz']
             ).format({
@@ -247,7 +319,7 @@ def main():
                     if savings > 0:
                         st.success(f"💰 Einsparpotenzial: **{savings:.2f}€** pro Packung")
 
-                    styled_alt = alt_df.style.applymap(
+                    styled_alt = alt_df.style.map(
                         color_differenz,
                         subset=['differenz']
                     ).format({
