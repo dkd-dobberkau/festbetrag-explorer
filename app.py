@@ -322,12 +322,13 @@ def main():
                     # Add emoji for zuzahlungsbefreit
                     zb_icon = "🆓 " if med.get('zuzahlungsbefreit', 0) == 1 else ""
                     st.write(f"{zb_icon}**{med['name']}**")
+                    st.caption(f"**PZN:** {med['pzn']}")
 
                     # Show manufacturer if available
                     hersteller = med.get('hersteller')
                     if hersteller:
                         st.caption(f"🏭 {hersteller}")
-                    st.caption(f"PZN: {med['pzn']} | {med['preis']:.2f}€")
+                    st.caption(f"💰 Preis: {med['preis']:.2f}€ | Festbetrag: {med['festbetrag']:.2f}€")
                 with col2:
                     if st.button("🔍", key=f"search_{med['pzn']}", help="Alternativen suchen"):
                         # Trigger search for this medication
