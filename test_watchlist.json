@@ -1,0 +1,20 @@
+[
+  {
+    "pzn": "00089891",
+    "name": "Sitagliptin + Metformin VELMETIA 50MG/850MG",
+    "preis": 47.05,
+    "festbetrag": 23.62,
+    "differenz": 23.43,
+    "hersteller": "MSD Sharp & Dohme",
+    "zuzahlungsbefreit": 0
+  },
+  {
+    "pzn": "01015110",
+    "name": "CAPTOPRIL ABZ 12.5MG",
+    "preis": 12.66,
+    "festbetrag": 13.29,
+    "differenz": -0.63,
+    "hersteller": "AbZ Pharma GmbH Captopril",
+    "zuzahlungsbefreit": 1
+  }
+]

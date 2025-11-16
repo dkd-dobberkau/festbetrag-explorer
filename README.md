@@ -113,39 +113,56 @@ Ihre CSV-Datei sollte mindestens folgende Spalten enthalten:
 
 Die App kann die offizielle Liste zuzahlungsbefreiter Arzneimittel vom GKV-Spitzenverband importieren.
 
-### Schritt 1: PDF herunterladen
+### Methode 1: CSV-Import (empfohlen)
+
+Die einfachste Methode ist der direkte CSV-Import:
 
 ```bash
-python scripts/download_data.py
+# CSV-Datei vorbereiten (manuell herunterladen oder vorhandene CSV nutzen)
+# Erwartetes Format: pzn,name,hersteller,preis
+
+# CSV importieren
+python scripts/import_csv_zuzahlungsbefreit.py docs/Zuzahlungsbefreit_LATEST.csv
+
+# Mit Reset aller Flags vor Import
+python scripts/import_csv_zuzahlungsbefreit.py --reset-all
+
+# Nur testen, ohne DB zu ändern
+python scripts/import_csv_zuzahlungsbefreit.py --dry-run
 ```
 
-Dies lädt die aktuelle Zuzahlungsbefreiungsliste als PDF herunter (ca. 1-2 MB).
+**Was passiert beim CSV-Import?**
+1. Liest CSV mit PZN, Name, Hersteller, Preis
+2. Setzt `zuzahlungsbefreit = 1` für alle gefundenen Medikamente
+3. Aktualisiert Hersteller-Information aus CSV
 
-### Schritt 2: PDF zu CSV konvertieren und DB aktualisieren
+### Methode 2: PDF-Import (legacy)
+
+Falls Sie ein PDF verarbeiten müssen:
 
 ```bash
+# Voraussetzung: pdftotext installiert
+# macOS: brew install poppler
+# Linux: apt-get install poppler-utils
+
 # Kompletter Import (PDF → TXT → CSV → Datenbank)
 python scripts/import_zuzahlungsbefreit.py
 
-# Oder nur CSV generieren (ohne DB-Update)
+# Nur CSV generieren (ohne DB-Update)
 python scripts/import_zuzahlungsbefreit.py --csv-only
 
 # Mit eigenem PDF
 python scripts/import_zuzahlungsbefreit.py docs/MeinPDF.pdf
-
-# Alle Flags zurücksetzen vor Import
-python scripts/import_zuzahlungsbefreit.py --reset-all
 ```
 
-### Was passiert beim Import?
-
+**Was passiert beim PDF-Import?**
 1. **PDF → Text**: `pdftotext -layout -enc UTF-8` extrahiert Text
-2. **Text → CSV**: Parser extrahiert PZN, Name, Preis
+2. **Text → CSV**: Parser extrahiert PZN, Name, Hersteller, Preis
 3. **CSV → Datenbank**: Medikamente werden auf `zuzahlungsbefreit = 1` gesetzt
 
 **Generierte Dateien** (alle in `docs/`, gitignored):
 - `*.txt` - Extrahierter Text
-- `*.csv` - Strukturierte Daten
+- `*.csv` - Strukturierte Daten (kann für CSV-Import wiederverwendet werden)
 - `*.pdf` - Heruntergeladenes PDF
 
 ## 💡 Verwendung
@@ -213,7 +230,9 @@ festbetrag-explorer/
 │   └── *.csv                      # Generierte CSVs (gitignored)
 ├── scripts/                        # Utility-Scripts
 │   ├── download_data.py           # GKV-PDF Downloader
-│   └── import_zuzahlungsbefreit.py # PDF→CSV→DB Importer
+│   ├── import_csv_zuzahlungsbefreit.py  # CSV→DB Importer (empfohlen)
+│   ├── import_zuzahlungsbefreit.py      # PDF→CSV→DB Importer (legacy)
+│   └── extract_manufacturers.py   # Hersteller aus Namen extrahieren
 └── utils/                          # Utility-Funktionen (leer)
 ```
 
