@@ -8,10 +8,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from pathlib import Path
-import os
 import json
-import subprocess
-import tempfile
 from streamlit_searchbox import st_searchbox
 
 # Page config
@@ -256,31 +253,6 @@ def import_watchlist(json_str):
         return False
 
 
-def run_pdf_import(pdf_file):
-    """Run PDF import process with uploaded file."""
-    try:
-        # Save uploaded file to temp
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-            tmp_file.write(pdf_file.getvalue())
-            tmp_path = tmp_file.name
-
-        # Run import script
-        result = subprocess.run(
-            ['python', 'scripts/import_zuzahlungsbefreit.py', tmp_path],
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-
-        # Clean up
-        os.unlink(tmp_path)
-
-        return result.returncode == 0, result.stdout, result.stderr
-
-    except Exception as e:
-        return False, "", str(e)
-
-
 def main():
     """Main app function."""
     st.title("💊 Festbetrag Explorer")
@@ -368,26 +340,6 @@ def main():
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Fehler beim Laden: {e}")
-
-        st.markdown("---")
-
-        # Admin section
-        if st.checkbox("🔧 Admin-Bereich"):
-            st.markdown("### PDF Import")
-            uploaded_pdf = st.file_uploader("PDF hochladen", type="pdf", key="pdf_upload")
-
-            if uploaded_pdf and st.button("Import starten"):
-                with st.spinner("Importiere PDF..."):
-                    success, stdout, stderr = run_pdf_import(uploaded_pdf)
-
-                    if success:
-                        st.success("✅ Import erfolgreich!")
-                        with st.expander("Details anzeigen"):
-                            st.code(stdout)
-                    else:
-                        st.error("❌ Import fehlgeschlagen!")
-                        with st.expander("Fehler anzeigen"):
-                            st.code(stderr if stderr else stdout)
 
         st.markdown("---")
         st.markdown("### ℹ️ Info")

@@ -17,9 +17,6 @@ Eine einfache Streamlit-App zum Suchen und Vergleichen von Medikamentenpreisen b
 ### Voraussetzungen
 - Python 3.8+
 - pip
-- `pdftotext` (für PDF-Import von Zuzahlungsbefreiungsliste)
-  - **macOS**: `brew install poppler`
-  - **Linux**: `apt-get install poppler-utils`
 
 ### Setup
 
@@ -36,10 +33,10 @@ pip install -r requirements.txt
 
 3. Datenbank einrichten (siehe unten)
 
-4. (Optional) Zuzahlungsbefreiungsliste herunterladen:
+4. (Optional) Zuzahlungsbefreiungsliste importieren:
 ```bash
-python scripts/download_data.py
-python scripts/import_zuzahlungsbefreit.py
+# CSV-Datei bereitstellen und importieren
+python scripts/import_csv_zuzahlungsbefreit.py docs/Zuzahlungsbefreit_LATEST.csv
 ```
 
 5. App starten:
@@ -113,9 +110,7 @@ Ihre CSV-Datei sollte mindestens folgende Spalten enthalten:
 
 Die App kann die offizielle Liste zuzahlungsbefreiter Arzneimittel vom GKV-Spitzenverband importieren.
 
-### Methode 1: CSV-Import (empfohlen)
-
-Die einfachste Methode ist der direkte CSV-Import:
+### CSV-Import
 
 ```bash
 # CSV-Datei vorbereiten (manuell herunterladen oder vorhandene CSV nutzen)
@@ -131,39 +126,17 @@ python scripts/import_csv_zuzahlungsbefreit.py --reset-all
 python scripts/import_csv_zuzahlungsbefreit.py --dry-run
 ```
 
-**Was passiert beim CSV-Import?**
+**Was passiert beim Import?**
 1. Liest CSV mit PZN, Name, Hersteller, Preis
 2. Setzt `zuzahlungsbefreit = 1` für alle gefundenen Medikamente
 3. Aktualisiert Hersteller-Information aus CSV
 
-### Methode 2: PDF-Import (legacy)
-
-Falls Sie ein PDF verarbeiten müssen:
-
-```bash
-# Voraussetzung: pdftotext installiert
-# macOS: brew install poppler
-# Linux: apt-get install poppler-utils
-
-# Kompletter Import (PDF → TXT → CSV → Datenbank)
-python scripts/import_zuzahlungsbefreit.py
-
-# Nur CSV generieren (ohne DB-Update)
-python scripts/import_zuzahlungsbefreit.py --csv-only
-
-# Mit eigenem PDF
-python scripts/import_zuzahlungsbefreit.py docs/MeinPDF.pdf
+**Erwartetes CSV-Format:**
+```csv
+pzn,name,hersteller,preis
+15210588,ABILIFY 1 MG/ML,CC Pharma GmbH Aripiprazol,36.60
+12395133,ABILIFY 1 MG/ML LSG Z EINN,Medicopharm AG Aripiprazol,36.49
 ```
-
-**Was passiert beim PDF-Import?**
-1. **PDF → Text**: `pdftotext -layout -enc UTF-8` extrahiert Text
-2. **Text → CSV**: Parser extrahiert PZN, Name, Hersteller, Preis
-3. **CSV → Datenbank**: Medikamente werden auf `zuzahlungsbefreit = 1` gesetzt
-
-**Generierte Dateien** (alle in `docs/`, gitignored):
-- `*.txt` - Extrahierter Text
-- `*.csv` - Strukturierte Daten (kann für CSV-Import wiederverwendet werden)
-- `*.pdf` - Heruntergeladenes PDF
 
 ## 💡 Verwendung
 
@@ -229,9 +202,7 @@ festbetrag-explorer/
 │   ├── *.txt                      # Extrahierte Texte (gitignored)
 │   └── *.csv                      # Generierte CSVs (gitignored)
 ├── scripts/                        # Utility-Scripts
-│   ├── download_data.py           # GKV-PDF Downloader
-│   ├── import_csv_zuzahlungsbefreit.py  # CSV→DB Importer (empfohlen)
-│   ├── import_zuzahlungsbefreit.py      # PDF→CSV→DB Importer (legacy)
+│   ├── import_csv_zuzahlungsbefreit.py  # CSV→DB Importer
 │   └── extract_manufacturers.py   # Hersteller aus Namen extrahieren
 └── utils/                          # Utility-Funktionen (leer)
 ```
