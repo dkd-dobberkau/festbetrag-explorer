@@ -50,19 +50,32 @@ Die App öffnet sich automatisch im Browser unter `http://localhost:8501`
 
 Die App benötigt eine SQLite-Datenbank mit der Festbetragsliste.
 
-### Option 1: Eigene Datenbank mitbringen
+### Schritt 1: BfArM Festbetragsliste herunterladen
 
-Legen Sie Ihre `festbetrag.db` in das `data/` Verzeichnis:
+**Offizielle Quelle:** [BfArM - Festbeträge und Zuzahlungen](https://www.bfarm.de/DE/Arzneimittel/Arzneimittelinformationen/Festbetraege-und-Zuzahlungen/_node.html)
+
+1. Laden Sie das aktuelle PDF herunter (z.B. `Festbetraege_20251101.pdf`)
+2. Speichern Sie es im `docs/` Verzeichnis
+
+### Schritt 2: Datenbank erstellen
+
 ```bash
-cp /pfad/zu/ihrer/festbetrag.db data/
+# Automatischer Import aus PDF (erfordert pdftotext)
+# macOS: brew install poppler
+# Linux: apt-get install poppler-utils
+python scripts/setup_database.py docs/Festbetraege_YYYYMMDD.pdf
 ```
 
-### Option 2: Aus CSV importieren
+**Hinweis:** Das PDF-Parsing ist komplex. Wenn Sie Probleme haben, können Sie:
+1. Eine vorhandene Datenbank verwenden
+2. Die Daten manuell in CSV konvertieren und importieren
 
-Falls Sie eine CSV-Datei haben:
+### Alternative: Eigene Datenbank
+
+Falls Sie bereits eine Datenbank haben:
 
 ```bash
-python scripts/import_csv.py /pfad/zur/festbetragsliste.csv
+cp /pfad/zu/ihrer/festbetrag.db data/
 ```
 
 ### Erforderliche Datenbank-Struktur
