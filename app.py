@@ -425,10 +425,17 @@ def main():
             cols = st.columns(min(len(df), 5))
             for idx, (_, row) in enumerate(df.head(5).iterrows()):
                 with cols[idx]:
+                    # Show price info
+                    price_info = f"{row['preis']:.2f}€"
+
+                    # Add zuzahlungsbefreit indicator
+                    zb_indicator = "🆓 " if row.get('zuzahlungsbefreit', 0) == 1 else ""
+
                     if st.button(
-                        f"➕ {row['arzneimittelname'][:15]}...",
+                        f"{zb_indicator}➕ {row['arzneimittelname'][:15]}...",
                         key=f"add_{row['pzn']}",
-                        use_container_width=True
+                        use_container_width=True,
+                        help=f"{row['arzneimittelname']}\n{price_info}"
                     ):
                         if add_to_watchlist(
                             row['pzn'],
@@ -442,6 +449,9 @@ def main():
                             st.rerun()
                         else:
                             st.warning("Bereits in Merkliste")
+
+                    # Show price below button
+                    st.caption(price_info)
 
             # Show alternatives for selected medication
             st.markdown("---")
