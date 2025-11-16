@@ -146,49 +146,47 @@ def parse_text_to_medications(txt_path: Path) -> List[Dict[str, str]]:
                 print(f"   Processing line {line_num}/{len(lines)}...", end='\r')
 
             # Skip empty lines and headers
-            line = line.strip()
-            if not line or len(line) < 20:
+            line_stripped = line.strip()
+            if not line_stripped or len(line_stripped) < 20:
                 continue
 
-            # Look for PZN (7-digit number at start of line or after whitespace)
-            pzn_match = re.search(r'\b(\d{7})\b', line)
+            # Skip header lines
+            if 'Arzneimittelname' in line or 'PZN' in line or 'Wirkstoff' in line:
+                continue
+
+            # Look for PZN (8-digit number, PZN can be 8 digits in layout)
+            pzn_match = re.search(r'\b(\d{8})\b', line_stripped)
             if not pzn_match:
                 continue
 
             pzn = pzn_match.group(1)
 
-            # Try to extract the rest of the data
-            # This is a heuristic parser - adjust based on actual PDF structure
-            parts = line.split()
+            # The format is: NAME   PZN   MANUFACTURER   WIRKSTOFF   ...   PREIS
+            # Use column positions from the layout
+            # Name is typically in columns 0-35, PZN around 35-50
 
-            if len(parts) < 3:
+            # Extract name (everything before PZN)
+            pzn_pos = line.find(pzn)
+            if pzn_pos == -1:
                 continue
 
-            # Find PZN position
-            pzn_idx = parts.index(pzn)
+            name = line[:pzn_pos].strip()
 
-            # Extract medication name (usually follows PZN)
-            name_parts = []
-            i = pzn_idx + 1
-            while i < len(parts) and not parts[i].isdigit():
-                name_parts.append(parts[i])
-                i += 1
-                if i >= len(parts):
-                    break
-
-            name = ' '.join(name_parts) if name_parts else ''
-
-            # Try to extract price (usually a decimal number like 12.34)
+            # Extract price (last number with decimal point in format XX,XX or XX.XX)
             preis = ''
-            for part in parts[pzn_idx:]:
-                if re.match(r'\d+[.,]\d{2}', part):
-                    preis = part.replace(',', '.')
-                    break
+            price_matches = re.findall(r'\d+[,.]\d{2}', line_stripped)
+            if price_matches:
+                # Take the last price (usually at end of line)
+                preis = price_matches[-1].replace(',', '.')
+
+            # Skip if no name or price found
+            if not name or not preis:
+                continue
 
             med_data = {
                 'pzn': pzn,
                 'name': name.strip(),
-                'raw_line': line,  # Keep raw line for debugging
+                'raw_line': line_stripped,  # Keep raw line for debugging
                 'preis': preis
             }
 
