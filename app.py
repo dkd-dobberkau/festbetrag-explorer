@@ -9,6 +9,9 @@ import pandas as pd
 import sqlite3
 from pathlib import Path
 import os
+import json
+import subprocess
+import tempfile
 from streamlit_searchbox import st_searchbox
 
 # Page config
@@ -59,8 +62,8 @@ def search_medications(query, search_type="all", limit=50):
 
     if search_type == "pzn":
         sql = """
-            SELECT pzn, arzneimittelname, wirkstoff, packungsgroesse,
-                   preis, festbetrag, differenz, darreichungsform
+            SELECT pzn, arzneimittelname, hersteller, wirkstoff, packungsgroesse,
+                   preis, festbetrag, differenz, darreichungsform, zuzahlungsbefreit
             FROM medications
             WHERE pzn LIKE ?
             ORDER BY preis ASC
@@ -69,8 +72,8 @@ def search_medications(query, search_type="all", limit=50):
         params = (f'{query}%', limit)
     elif search_type == "name":
         sql = """
-            SELECT pzn, arzneimittelname, wirkstoff, packungsgroesse,
-                   preis, festbetrag, differenz, darreichungsform
+            SELECT pzn, arzneimittelname, hersteller, wirkstoff, packungsgroesse,
+                   preis, festbetrag, differenz, darreichungsform, zuzahlungsbefreit
             FROM medications
             WHERE arzneimittelname LIKE ?
             ORDER BY preis ASC
@@ -79,8 +82,8 @@ def search_medications(query, search_type="all", limit=50):
         params = (f'%{query.upper()}%', limit)
     elif search_type == "wirkstoff":
         sql = """
-            SELECT pzn, arzneimittelname, wirkstoff, packungsgroesse,
-                   preis, festbetrag, differenz, darreichungsform
+            SELECT pzn, arzneimittelname, hersteller, wirkstoff, packungsgroesse,
+                   preis, festbetrag, differenz, darreichungsform, zuzahlungsbefreit
             FROM medications
             WHERE wirkstoff LIKE ?
             ORDER BY preis ASC
@@ -89,8 +92,8 @@ def search_medications(query, search_type="all", limit=50):
         params = (f'%{query}%', limit)
     else:  # all
         sql = """
-            SELECT pzn, arzneimittelname, wirkstoff, packungsgroesse,
-                   preis, festbetrag, differenz, darreichungsform
+            SELECT pzn, arzneimittelname, hersteller, wirkstoff, packungsgroesse,
+                   preis, festbetrag, differenz, darreichungsform, zuzahlungsbefreit
             FROM medications
             WHERE pzn LIKE ? OR arzneimittelname LIKE ? OR wirkstoff LIKE ?
             ORDER BY preis ASC
@@ -182,8 +185,8 @@ def get_alternatives(pzn):
 
     # Find alternatives
     sql = """
-        SELECT pzn, arzneimittelname, wirkstoff, packungsgroesse,
-               preis, festbetrag, differenz, darreichungsform
+        SELECT pzn, arzneimittelname, hersteller, wirkstoff, packungsgroesse,
+               preis, festbetrag, differenz, darreichungsform, zuzahlungsbefreit
         FROM medications
         WHERE festbetragsgruppe = ?
             AND wirkstoffmenge_1 = ?
@@ -200,10 +203,83 @@ def get_alternatives(pzn):
     return df
 
 
+def initialize_watchlist():
+    """Initialize watchlist in session state."""
+    if 'watchlist' not in st.session_state:
+        st.session_state.watchlist = []
+
+
+def add_to_watchlist(pzn, name, preis, festbetrag, hersteller=None, zuzahlungsbefreit=0):
+    """Add medication to watchlist."""
+    medication = {
+        'pzn': pzn,
+        'name': name,
+        'preis': preis,
+        'festbetrag': festbetrag,
+        'hersteller': hersteller,
+        'zuzahlungsbefreit': zuzahlungsbefreit
+    }
+
+    # Check if already in watchlist
+    if not any(m['pzn'] == pzn for m in st.session_state.watchlist):
+        st.session_state.watchlist.append(medication)
+        return True
+    return False
+
+
+def remove_from_watchlist(pzn):
+    """Remove medication from watchlist."""
+    st.session_state.watchlist = [
+        m for m in st.session_state.watchlist if m['pzn'] != pzn
+    ]
+
+
+def export_watchlist():
+    """Export watchlist as JSON."""
+    return json.dumps(st.session_state.watchlist, indent=2, ensure_ascii=False)
+
+
+def import_watchlist(json_str):
+    """Import watchlist from JSON."""
+    try:
+        st.session_state.watchlist = json.loads(json_str)
+        return True
+    except:
+        return False
+
+
+def run_pdf_import(pdf_file):
+    """Run PDF import process with uploaded file."""
+    try:
+        # Save uploaded file to temp
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            tmp_file.write(pdf_file.getvalue())
+            tmp_path = tmp_file.name
+
+        # Run import script
+        result = subprocess.run(
+            ['python', 'scripts/import_zuzahlungsbefreit.py', tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+
+        # Clean up
+        os.unlink(tmp_path)
+
+        return result.returncode == 0, result.stdout, result.stderr
+
+    except Exception as e:
+        return False, "", str(e)
+
+
 def main():
     """Main app function."""
     st.title("💊 Festbetrag Explorer")
     st.markdown("**Finden Sie günstigere Medikamenten-Alternativen**")
+
+    # Initialize watchlist
+    initialize_watchlist()
 
     # Check database
     if not check_database():
@@ -225,6 +301,74 @@ def main():
         )
 
         limit = st.slider("Max. Ergebnisse", 10, 200, 50)
+
+        st.markdown("---")
+
+        # Watchlist section
+        st.markdown(f"### 📋 Meine Merkliste ({len(st.session_state.watchlist)})")
+
+        if st.session_state.watchlist:
+            for med in st.session_state.watchlist:
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    # Add emoji for zuzahlungsbefreit
+                    zb_icon = "🆓 " if med.get('zuzahlungsbefreit', 0) == 1 else ""
+                    st.write(f"{zb_icon}**{med['name']}**")
+
+                    # Show manufacturer if available
+                    hersteller = med.get('hersteller')
+                    if hersteller:
+                        st.caption(f"🏭 {hersteller}")
+                    st.caption(f"PZN: {med['pzn']} | {med['preis']:.2f}€")
+                with col2:
+                    if st.button("❌", key=f"remove_{med['pzn']}"):
+                        remove_from_watchlist(med['pzn'])
+                        st.rerun()
+
+            # Download/Clear buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="💾 Download",
+                    data=export_watchlist(),
+                    file_name="merkliste.json",
+                    mime="application/json"
+                )
+            with col2:
+                if st.button("🗑️ Leeren"):
+                    st.session_state.watchlist = []
+                    st.rerun()
+
+            # Upload watchlist
+            uploaded_watchlist = st.file_uploader("📤 Merkliste laden", type="json", key="watchlist_upload")
+            if uploaded_watchlist:
+                if import_watchlist(uploaded_watchlist.read().decode()):
+                    st.success("Merkliste geladen!")
+                    st.rerun()
+                else:
+                    st.error("Fehler beim Laden")
+        else:
+            st.info("Keine Medikamente in der Merkliste")
+
+        st.markdown("---")
+
+        # Admin section
+        if st.checkbox("🔧 Admin-Bereich"):
+            st.markdown("### PDF Import")
+            uploaded_pdf = st.file_uploader("PDF hochladen", type="pdf", key="pdf_upload")
+
+            if uploaded_pdf and st.button("Import starten"):
+                with st.spinner("Importiere PDF..."):
+                    success, stdout, stderr = run_pdf_import(uploaded_pdf)
+
+                    if success:
+                        st.success("✅ Import erfolgreich!")
+                        with st.expander("Details anzeigen"):
+                            st.code(stdout)
+                    else:
+                        st.error("❌ Import fehlgeschlagen!")
+                        with st.expander("Fehler anzeigen"):
+                            st.code(stderr if stderr else stdout)
 
         st.markdown("---")
         st.markdown("### ℹ️ Info")
@@ -297,6 +441,29 @@ def main():
             })
 
             st.dataframe(styled_df, use_container_width=True, height=400)
+
+            # Add to watchlist buttons
+            st.markdown("### ➕ Zur Merkliste hinzufügen")
+            cols = st.columns(min(len(df), 5))
+            for idx, (_, row) in enumerate(df.head(5).iterrows()):
+                with cols[idx]:
+                    if st.button(
+                        f"➕ {row['arzneimittelname'][:15]}...",
+                        key=f"add_{row['pzn']}",
+                        use_container_width=True
+                    ):
+                        if add_to_watchlist(
+                            row['pzn'],
+                            row['arzneimittelname'],
+                            row['preis'],
+                            row['festbetrag'],
+                            row.get('hersteller'),
+                            row.get('zuzahlungsbefreit', 0)
+                        ):
+                            st.success(f"✅ Hinzugefügt!")
+                            st.rerun()
+                        else:
+                            st.warning("Bereits in Merkliste")
 
             # Show alternatives for selected medication
             st.markdown("---")

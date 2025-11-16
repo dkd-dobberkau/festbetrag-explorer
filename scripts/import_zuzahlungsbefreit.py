@@ -172,6 +172,33 @@ def parse_text_to_medications(txt_path: Path) -> List[Dict[str, str]]:
 
             name = line[:pzn_pos].strip()
 
+            # Extract manufacturer (text after PZN, before wirkstoff/numbers)
+            # Layout: NAME  PZN  MANUFACTURER  WIRKSTOFF  ...
+            # Extract the portion between PZN and the end, look for manufacturer pattern
+            after_pzn_start = pzn_pos + len(pzn)
+            # Find the manufacturer section (usually between col 50-90 in the layout)
+            manufacturer_section = line[after_pzn_start:after_pzn_start+100].strip()
+
+            # Manufacturer typically ends before dosage numbers or wirkstoff name
+            # Split and take words until we hit numbers or common wirkstoff pattern
+            parts = manufacturer_section.split()
+            hersteller_parts = []
+
+            for i, part in enumerate(parts):
+                # Stop before numbers with units (dosage)
+                if re.match(r'\d+', part):
+                    break
+                # Stop before common dose units
+                if part.lower() in ['mg', 'ml', 'g', 'st', 'stück']:
+                    break
+                # Take max 3-4 words for manufacturer
+                if len(hersteller_parts) < 4:
+                    hersteller_parts.append(part)
+                else:
+                    break
+
+            hersteller = ' '.join(hersteller_parts).strip()
+
             # Extract price (last number with decimal point in format XX,XX or XX.XX)
             preis = ''
             price_matches = re.findall(r'\d+[,.]\d{2}', line_stripped)
@@ -186,6 +213,7 @@ def parse_text_to_medications(txt_path: Path) -> List[Dict[str, str]]:
             med_data = {
                 'pzn': pzn,
                 'name': name.strip(),
+                'hersteller': hersteller.strip(),
                 'raw_line': line_stripped,  # Keep raw line for debugging
                 'preis': preis
             }
@@ -274,13 +302,15 @@ def update_database(medications: List[Dict[str, str]], mark_all: bool = False) -
             print(f"   Processed {i}/{len(medications)}...", end='\r')
 
         pzn = med['pzn']
+        hersteller = med.get('hersteller', '')
 
-        # Try to find medication by PZN
+        # Try to find medication by PZN and update with hersteller
         cursor.execute("""
             UPDATE medications
-            SET zuzahlungsbefreit = 1
+            SET zuzahlungsbefreit = 1,
+                hersteller = ?
             WHERE pzn = ?
-        """, (pzn,))
+        """, (hersteller, pzn))
 
         if cursor.rowcount > 0:
             updated += 1
