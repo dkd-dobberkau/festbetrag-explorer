@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 import json
 from streamlit_searchbox import st_searchbox
+from utils.darreichungsformen import get_darreichungsform_with_abbr
 
 # Page config
 st.set_page_config(
@@ -51,6 +52,13 @@ def check_database():
     except Exception as e:
         st.error(f"❌ Fehler beim Zugriff auf Datenbank: {e}")
         return False
+
+
+def format_darreichungsform(df):
+    """Format darreichungsform column with long names."""
+    if 'darreichungsform' in df.columns:
+        df['darreichungsform'] = df['darreichungsform'].apply(get_darreichungsform_with_abbr)
+    return df
 
 
 def search_medications(query, search_type="all", limit=50):
@@ -101,7 +109,7 @@ def search_medications(query, search_type="all", limit=50):
     df = pd.read_sql_query(sql, conn, params=params)
     conn.close()
 
-    return df
+    return format_darreichungsform(df)
 
 
 def search_function(searchterm: str):
@@ -197,7 +205,7 @@ def get_alternatives(pzn):
     df = pd.read_sql_query(sql, conn, params=(gruppe, menge1, menge2, package, form))
     conn.close()
 
-    return df
+    return format_darreichungsform(df)
 
 
 def initialize_watchlist():

@@ -101,6 +101,51 @@ Medikament kostet 15,00 € → Normale Zuzahlung (5-10 €)
 - **Generika**: Nachahmer-Medikamente (nach Patentablauf des Originals)
 - **Darreichungsform**: Tablette, Kapsel, Salbe, Tropfen, etc.
 
+## 📚 Referenzdateien im docs/ Ordner
+
+Im `docs/` Verzeichnis befinden sich zusätzliche Referenzdateien vom BfArM (Stand: 01.10.2025):
+
+### darreichungsformen-20251001_txt.txt
+**Darreichungsformen-Abkürzungen und ihre Bedeutung**
+
+Enthält 74 Darreichungsformen-Kürzel mit Langformen:
+- `FTBL` → Filmtabletten
+- `TABL` → Tabletten
+- `KAPS` → Kapseln, Hartkapseln, Weichkapseln
+- `SUPP` → Zäpfchen
+- `SALB` → Salbe
+- etc.
+
+**Verwendung in der App**: Diese Datei wird automatisch geladen, um Darreichungsformen benutzerfreundlich anzuzeigen (z.B. "Filmtabletten (FTBL)" statt nur "FTBL").
+
+### wirkstoffkuerzel-20251001_txt.txt
+**Wirkstoff-Abkürzungen**
+
+Enthält 358 Wirkstoff-Kürzel mit Langformen:
+- `AMDN` → Amlodipin
+- `RAPL` → Ramipril
+- `OMZL` → Omeprazol
+- `IBPN` → Ibuprofen
+- etc.
+
+**Verwendung**: Aktuell als Referenz verfügbar, kann für zukünftige Features verwendet werden (z.B. verbesserte Suche, Auto-Vervollständigung).
+
+### regresssion-20251001_txt.txt
+**Regressionskoeffizienten zur Festbetrag-Berechnung**
+
+Enthält mathematische Parameter (a, b, c) für jede Wirkstoffgruppe zur Berechnung von Festbeträgen:
+- Ermöglicht Festbetrag-Berechnung basierend auf Wirkstoffmenge und Packungsgröße
+- Formel: `Festbetrag = a * wirkstoffmenge^b * packungsgroesse^c`
+- Inkrafttreten-Datum und Berechnungsebene (Apothekeneinkaufspreis/Abgabepreis)
+
+**Verwendung**: Aktuell als Referenz verfügbar. Festbeträge sind bereits in der Datenbank vorhanden, daher wird diese Datei nicht aktiv verwendet.
+
+### Warum nicht in die Datenbank importieren?
+
+- **Darreichungsformen**: Als Python-Modul schneller und einfacher zu nutzen
+- **Wirkstoff-Kürzel**: Für zukünftige Features vorgehalten
+- **Regression**: Festbeträge sind bereits in DB, Berechnung nicht notwendig
+
 ---
 
 **Hinweis**: Diese Informationen dienen nur zur allgemeinen Information. Bei Fragen zu Ihrer Medikation konsultieren Sie bitte Ihren Arzt oder Apotheker.
