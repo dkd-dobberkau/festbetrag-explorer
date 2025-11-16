@@ -204,9 +204,17 @@ def get_alternatives(pzn):
 
 
 def initialize_watchlist():
-    """Initialize watchlist in session state."""
+    """Initialize watchlist in session state (session-only, no persistence)."""
     if 'watchlist' not in st.session_state:
         st.session_state.watchlist = []
+
+    # Check if we should load from uploaded file
+    if 'uploaded_watchlist_data' in st.session_state and st.session_state.uploaded_watchlist_data:
+        try:
+            st.session_state.watchlist = json.loads(st.session_state.uploaded_watchlist_data)
+            st.session_state.uploaded_watchlist_data = None  # Clear after loading
+        except:
+            pass
 
 
 def add_to_watchlist(pzn, name, preis, festbetrag, hersteller=None, zuzahlungsbefreit=0):
@@ -278,7 +286,7 @@ def main():
     st.title("💊 Festbetrag Explorer")
     st.markdown("**Finden Sie günstigere Medikamenten-Alternativen**")
 
-    # Initialize watchlist
+    # Initialize watchlist (loads from file automatically)
     initialize_watchlist()
 
     # Check database
@@ -309,7 +317,7 @@ def main():
 
         if st.session_state.watchlist:
             for med in st.session_state.watchlist:
-                col1, col2 = st.columns([4, 1])
+                col1, col2, col3 = st.columns([3, 1, 1])
                 with col1:
                     # Add emoji for zuzahlungsbefreit
                     zb_icon = "🆓 " if med.get('zuzahlungsbefreit', 0) == 1 else ""
@@ -321,7 +329,12 @@ def main():
                         st.caption(f"🏭 {hersteller}")
                     st.caption(f"PZN: {med['pzn']} | {med['preis']:.2f}€")
                 with col2:
-                    if st.button("❌", key=f"remove_{med['pzn']}"):
+                    if st.button("🔍", key=f"search_{med['pzn']}", help="Alternativen suchen"):
+                        # Trigger search for this medication
+                        st.session_state.selected_watchlist_pzn = med['pzn']
+                        st.rerun()
+                with col3:
+                    if st.button("❌", key=f"remove_{med['pzn']}", help="Entfernen"):
                         remove_from_watchlist(med['pzn'])
                         st.rerun()
 
@@ -340,13 +353,17 @@ def main():
                     st.rerun()
 
             # Upload watchlist
+            st.markdown("---")
             uploaded_watchlist = st.file_uploader("📤 Merkliste laden", type="json", key="watchlist_upload")
-            if uploaded_watchlist:
-                if import_watchlist(uploaded_watchlist.read().decode()):
-                    st.success("Merkliste geladen!")
+            if uploaded_watchlist is not None:
+                try:
+                    content = uploaded_watchlist.read().decode()
+                    # Store in session state to load on next rerun
+                    st.session_state.uploaded_watchlist_data = content
+                    st.success("✅ Merkliste wird geladen...")
                     st.rerun()
-                else:
-                    st.error("Fehler beim Laden")
+                except Exception as e:
+                    st.error(f"❌ Fehler beim Laden: {e}")
         else:
             st.info("Keine Medikamente in der Merkliste")
 
@@ -380,25 +397,32 @@ def main():
         - 🔴 Positiv: Über Festbetrag (Zuzahlung nötig)
         """)
 
-    # Search box with inline autocomplete
-    selected_value = st_searchbox(
-        search_function,
-        placeholder="🔎 PZN, Medikamentenname oder Wirkstoff eingeben...",
-        label="Medikament suchen",
-        clear_on_submit=False,
-        key="medication_searchbox"
-    )
-
-    # Extract search query from selected value
+    # Check if searching from watchlist
     search_query = None
-    if selected_value:
-        # Extract the actual search term from the suggestion
-        if " - " in selected_value:  # PZN format
-            search_query = selected_value.split(" - ")[0]
-        elif " (" in selected_value:  # Name format
-            search_query = selected_value.split(" (")[0]
-        else:  # Wirkstoff or direct input
-            search_query = selected_value
+    if 'selected_watchlist_pzn' in st.session_state and st.session_state.selected_watchlist_pzn:
+        # Search triggered from watchlist - use PZN directly
+        search_query = st.session_state.selected_watchlist_pzn
+        # Clear the trigger
+        st.session_state.selected_watchlist_pzn = None
+    else:
+        # Normal search box with inline autocomplete
+        selected_value = st_searchbox(
+            search_function,
+            placeholder="🔎 PZN, Medikamentenname oder Wirkstoff eingeben...",
+            label="Medikament suchen",
+            clear_on_submit=False,
+            key="medication_searchbox"
+        )
+
+        # Extract search query from selected value
+        if selected_value:
+            # Extract the actual search term from the suggestion
+            if " - " in selected_value:  # PZN format
+                search_query = selected_value.split(" - ")[0]
+            elif " (" in selected_value:  # Name format
+                search_query = selected_value.split(" (")[0]
+            else:  # Wirkstoff or direct input
+                search_query = selected_value
 
     if search_query:
         with st.spinner("Suche läuft..."):
@@ -496,6 +520,46 @@ def main():
                     })
 
                     st.dataframe(styled_alt, use_container_width=True)
+
+                    # Add to watchlist buttons for alternatives
+                    st.markdown("### ➕ Alternative zur Merkliste hinzufügen")
+
+                    # Show top 5 cheapest alternatives
+                    top_alternatives = alt_df.nsmallest(5, 'preis')
+                    cols = st.columns(min(len(top_alternatives), 5))
+
+                    for idx, (_, row) in enumerate(top_alternatives.iterrows()):
+                        with cols[idx]:
+                            # Show price and savings
+                            price_info = f"{row['preis']:.2f}€"
+                            if row['preis'] < original_price:
+                                savings_per_pack = original_price - row['preis']
+                                price_info += f" (-{savings_per_pack:.2f}€)"
+
+                            # Add zuzahlungsbefreit indicator
+                            zb_indicator = "🆓 " if row.get('zuzahlungsbefreit', 0) == 1 else ""
+
+                            if st.button(
+                                f"{zb_indicator}➕ {row['arzneimittelname'][:20]}...",
+                                key=f"add_alt_{row['pzn']}",
+                                use_container_width=True,
+                                help=f"{row['arzneimittelname']}\n{price_info}"
+                            ):
+                                if add_to_watchlist(
+                                    row['pzn'],
+                                    row['arzneimittelname'],
+                                    row['preis'],
+                                    row['festbetrag'],
+                                    row.get('hersteller'),
+                                    row.get('zuzahlungsbefreit', 0)
+                                ):
+                                    st.success(f"✅ Hinzugefügt!")
+                                    st.rerun()
+                                else:
+                                    st.warning("Bereits in Merkliste")
+
+                            # Show price below button
+                            st.caption(price_info)
                 else:
                     st.info("Keine Alternativen gefunden.")
 
