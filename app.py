@@ -524,7 +524,7 @@ def main():
             # Column configuration for better display
             column_config = {
                 'arzneimittelname': st.column_config.TextColumn('Arzneimittel', width='large'),
-                'n_groesse': st.column_config.TextColumn('N-Größe', width='small'),
+                'n_groesse': st.column_config.TextColumn('N-Größe', width='medium'),
                 'darreichungsform': st.column_config.TextColumn('Darreichungsform', width='medium'),
                 'packungsgroesse': st.column_config.NumberColumn('Pkg.', width='small'),
                 'preis': st.column_config.TextColumn('Preis', width='small'),
