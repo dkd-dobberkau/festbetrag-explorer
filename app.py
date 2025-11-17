@@ -504,6 +504,7 @@ def main():
 
             # Reorder columns for better display
             column_order = [
+                'pzn',
                 'arzneimittelname',
                 'n_groesse',
                 'darreichungsform',
@@ -513,7 +514,6 @@ def main():
                 'differenz',
                 'wirkstoff',
                 'hersteller',
-                'pzn',
                 'zuzahlungsbefreit'
             ]
             # Only include columns that exist
