@@ -446,12 +446,31 @@ def main():
         st.session_state.selected_watchlist_pzn = None
     elif selected_value:
         # Extract search query from searchbox value
-        if " - " in selected_value:  # PZN format
-            search_query = selected_value.split(" - ")[0]
-        elif " (" in selected_value:  # Name format
-            search_query = selected_value.split(" (")[0]
+        # Handle new format with [N1/N2/N3] and price
+        # Format examples:
+        # - "12345678 - Medikamentenname [N3] - 5,49€"
+        # - "Medikamentenname (Wirkstoff) [N3] - 5,49€"
+        # - "Wirkstoff"
+
+        # First, remove price if present (everything after last " - " followed by digits)
+        clean_value = selected_value
+        if " - " in clean_value and "€" in clean_value:
+            # Remove the price part (last " - XX,XX€")
+            parts = clean_value.rsplit(" - ", 1)
+            if len(parts) == 2 and "€" in parts[1]:
+                clean_value = parts[0]
+
+        # Remove N-Größe if present [N1/N2/N3]
+        if " [N" in clean_value:
+            clean_value = clean_value.split(" [N")[0]
+
+        # Now extract the actual search term
+        if " - " in clean_value:  # PZN format
+            search_query = clean_value.split(" - ")[0]
+        elif " (" in clean_value:  # Name format
+            search_query = clean_value.split(" (")[0]
         else:  # Wirkstoff or direct input
-            search_query = selected_value
+            search_query = clean_value
 
     if search_query:
         with st.spinner("Suche läuft..."):
