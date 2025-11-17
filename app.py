@@ -11,6 +11,7 @@ from pathlib import Path
 import json
 from streamlit_searchbox import st_searchbox
 from utils.darreichungsformen import get_darreichungsform_with_abbr
+from utils.packungsgroessen import get_packungsgroesse_with_beschreibung
 
 # Page config
 st.set_page_config(
@@ -55,9 +56,25 @@ def check_database():
 
 
 def format_darreichungsform(df):
-    """Format darreichungsform column with long names."""
+    """Format darreichungsform column with long names and add N-Größe."""
+    # ERST N-Größe berechnen (benötigt Original-Kürzel)
+    if 'packungsgroesse' in df.columns and 'darreichungsform' in df.columns:
+        # N-Größe berechnen mit Original-Kürzeln
+        def calculate_n_groesse(row):
+            packungsgroesse = row.get('packungsgroesse', 0)
+            dform_kuerzel = row.get('darreichungsform', '')
+            return get_packungsgroesse_with_beschreibung(packungsgroesse, dform_kuerzel)
+
+        n_groesse_col = df.apply(calculate_n_groesse, axis=1)
+
+        # N-Größe als neue Spalte einfügen (nach packungsgroesse)
+        pkg_idx = df.columns.get_loc('packungsgroesse')
+        df.insert(pkg_idx + 1, 'n_groesse', n_groesse_col)
+
+    # DANN Darreichungsform formatieren
     if 'darreichungsform' in df.columns:
         df['darreichungsform'] = df['darreichungsform'].apply(get_darreichungsform_with_abbr)
+
     return df
 
 
