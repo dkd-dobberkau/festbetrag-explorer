@@ -502,8 +502,26 @@ def main():
                 else:
                     return 'background-color: #fff3cd'  # yellow
 
+            # Reorder columns for better display
+            column_order = [
+                'arzneimittelname',
+                'n_groesse',
+                'darreichungsform',
+                'packungsgroesse',
+                'preis',
+                'festbetrag',
+                'differenz',
+                'wirkstoff',
+                'hersteller',
+                'pzn',
+                'zuzahlungsbefreit'
+            ]
+            # Only include columns that exist
+            display_columns = [col for col in column_order if col in df.columns]
+            df_display = df[display_columns]
+
             # Format dataframe
-            styled_df = df.style.map(
+            styled_df = df_display.style.map(
                 color_differenz,
                 subset=['differenz']
             ).format({
@@ -512,7 +530,27 @@ def main():
                 'differenz': '{:.2f}€'
             })
 
-            st.dataframe(styled_df, use_container_width=True, height=400)
+            # Column configuration for better display
+            column_config = {
+                'arzneimittelname': st.column_config.TextColumn('Arzneimittel', width='large'),
+                'n_groesse': st.column_config.TextColumn('N-Größe', width='small'),
+                'darreichungsform': st.column_config.TextColumn('Darreichungsform', width='medium'),
+                'packungsgroesse': st.column_config.NumberColumn('Pkg.', width='small'),
+                'preis': st.column_config.TextColumn('Preis', width='small'),
+                'festbetrag': st.column_config.TextColumn('Festbetrag', width='small'),
+                'differenz': st.column_config.TextColumn('Differenz', width='small'),
+                'wirkstoff': st.column_config.TextColumn('Wirkstoff', width='medium'),
+                'hersteller': st.column_config.TextColumn('Hersteller', width='medium'),
+                'pzn': st.column_config.TextColumn('PZN', width='small'),
+                'zuzahlungsbefreit': st.column_config.CheckboxColumn('🆓 ZB', width='small')
+            }
+
+            st.dataframe(
+                styled_df,
+                use_container_width=True,
+                height=400,
+                column_config=column_config
+            )
 
             # Add to watchlist buttons
             st.markdown("### ➕ Zur Merkliste hinzufügen")
