@@ -57,19 +57,25 @@ def check_database():
 
 def format_darreichungsform(df):
     """Format darreichungsform column with long names and add N-Größe."""
+    # Make a copy to avoid mutation issues
+    df = df.copy()
+
     # ERST N-Größe berechnen (benötigt Original-Kürzel)
     if 'packungsgroesse' in df.columns and 'darreichungsform' in df.columns:
         # N-Größe berechnen mit Original-Kürzeln
-        def calculate_n_groesse(row):
-            packungsgroesse = row.get('packungsgroesse', 0)
-            dform_kuerzel = row.get('darreichungsform', '')
-            return get_packungsgroesse_with_beschreibung(packungsgroesse, dform_kuerzel)
+        df['n_groesse'] = df.apply(
+            lambda row: get_packungsgroesse_with_beschreibung(
+                row['packungsgroesse'] if pd.notna(row['packungsgroesse']) else 0,
+                row['darreichungsform'] if pd.notna(row['darreichungsform']) else ''
+            ), axis=1
+        )
 
-        n_groesse_col = df.apply(calculate_n_groesse, axis=1)
-
-        # N-Größe als neue Spalte einfügen (nach packungsgroesse)
-        pkg_idx = df.columns.get_loc('packungsgroesse')
-        df.insert(pkg_idx + 1, 'n_groesse', n_groesse_col)
+        # Spalte nach packungsgroesse verschieben
+        cols = list(df.columns)
+        pkg_idx = cols.index('packungsgroesse')
+        cols.remove('n_groesse')
+        cols.insert(pkg_idx + 1, 'n_groesse')
+        df = df[cols]
 
     # DANN Darreichungsform formatieren
     if 'darreichungsform' in df.columns:
