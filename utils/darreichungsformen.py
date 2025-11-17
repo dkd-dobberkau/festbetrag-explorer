@@ -82,6 +82,12 @@ DARREICHUNGSFORMEN = {
     'VASP': 'Vaginalzäpfchen'
 }
 
+# Fallback-Definitionen für häufige Sonderfälle
+DARREICHUNGSFORMEN_FALLBACK = {
+    'BETA': 'Verschiedene Darreichungsformen',
+    'COMP': 'Kombinationspräparat',
+}
+
 
 def get_darreichungsform_lang(kuerzel):
     """
@@ -91,13 +97,23 @@ def get_darreichungsform_lang(kuerzel):
         kuerzel: Abkürzung (z.B. "FTBL")
 
     Returns:
-        Langform (z.B. "Filmtabletten") oder Kürzel falls nicht gefunden
+        Langform (z.B. "Filmtabletten") oder Fallback/Kürzel falls nicht gefunden
     """
     if not kuerzel:
         return ""
 
     kuerzel_upper = kuerzel.strip().upper()
-    return DARREICHUNGSFORMEN.get(kuerzel_upper, kuerzel)
+
+    # Erst in offiziellen Darreichungsformen suchen
+    if kuerzel_upper in DARREICHUNGSFORMEN:
+        return DARREICHUNGSFORMEN[kuerzel_upper]
+
+    # Dann in Fallback-Definitionen suchen
+    if kuerzel_upper in DARREICHUNGSFORMEN_FALLBACK:
+        return DARREICHUNGSFORMEN_FALLBACK[kuerzel_upper]
+
+    # Sonst Kürzel zurückgeben
+    return kuerzel
 
 
 def get_darreichungsform_with_abbr(kuerzel):
@@ -108,15 +124,22 @@ def get_darreichungsform_with_abbr(kuerzel):
         kuerzel: Abkürzung (z.B. "FTBL")
 
     Returns:
-        "Filmtabletten (FTBL)" oder nur Kürzel falls nicht gefunden
+        - "Filmtabletten (FTBL)" für offizielle Darreichungsformen
+        - "Verschiedene Darreichungsformen (BETA)" für Fallback-Werte
+        - Nur Kürzel (z.B. "TEVA") für unbekannte Werte (Herstellernamen etc.)
     """
     if not kuerzel:
         return ""
 
     kuerzel_upper = kuerzel.strip().upper()
-    langform = DARREICHUNGSFORMEN.get(kuerzel_upper)
 
-    if langform:
-        return f"{langform} ({kuerzel_upper})"
-    else:
-        return kuerzel_upper
+    # Erst in offiziellen Darreichungsformen suchen
+    if kuerzel_upper in DARREICHUNGSFORMEN:
+        return f"{DARREICHUNGSFORMEN[kuerzel_upper]} ({kuerzel_upper})"
+
+    # Dann in Fallback-Definitionen suchen
+    if kuerzel_upper in DARREICHUNGSFORMEN_FALLBACK:
+        return f"{DARREICHUNGSFORMEN_FALLBACK[kuerzel_upper]} ({kuerzel_upper})"
+
+    # Für unbekannte Werte nur Kürzel zurückgeben (vermutlich Hersteller/Produktnamen)
+    return kuerzel_upper
