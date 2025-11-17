@@ -60,26 +60,17 @@ def check_database():
 
 
 def format_darreichungsform(df):
-    """Format darreichungsform column with long names and add N-Größe with emoji."""
+    """Format darreichungsform column with long names and add N-Größe."""
     # Make a copy to avoid mutation issues
     df = df.copy()
 
     # ERST N-Größe berechnen (benötigt Original-Kürzel)
     if 'packungsgroesse' in df.columns and 'darreichungsform' in df.columns:
-        # N-Größe berechnen mit Original-Kürzeln und Emoji hinzufügen
+        # N-Größe berechnen mit Original-Kürzeln (ohne Emoji)
         def format_n_groesse(row):
             pkg = row['packungsgroesse'] if pd.notna(row['packungsgroesse']) else 0
             dform = row['darreichungsform'] if pd.notna(row['darreichungsform']) else ''
-
-            n_text = get_packungsgroesse_with_beschreibung(pkg, dform)
-            if not n_text:
-                return ""
-
-            # Extract N-Größe (N1, N2, N3) from text
-            n_size = n_text.split()[0]  # "N3" from "N3 (Großpackung)"
-            emoji = get_packungsgroesse_emoji(n_size)
-
-            return f"{emoji} {n_text}" if emoji else n_text
+            return get_packungsgroesse_with_beschreibung(pkg, dform)
 
         df['n_groesse'] = df.apply(format_n_groesse, axis=1)
 
