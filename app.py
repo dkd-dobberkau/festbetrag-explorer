@@ -11,7 +11,11 @@ from pathlib import Path
 import json
 from streamlit_searchbox import st_searchbox
 from utils.darreichungsformen import get_darreichungsform_with_abbr
-from utils.packungsgroessen import get_packungsgroesse_with_beschreibung
+from utils.packungsgroessen import (
+    get_packungsgroesse_with_beschreibung,
+    get_packungsgroesse_n,
+    get_packungsgroesse_emoji
+)
 
 # Page config
 st.set_page_config(
@@ -56,19 +60,28 @@ def check_database():
 
 
 def format_darreichungsform(df):
-    """Format darreichungsform column with long names and add N-Größe."""
+    """Format darreichungsform column with long names and add N-Größe with emoji."""
     # Make a copy to avoid mutation issues
     df = df.copy()
 
     # ERST N-Größe berechnen (benötigt Original-Kürzel)
     if 'packungsgroesse' in df.columns and 'darreichungsform' in df.columns:
-        # N-Größe berechnen mit Original-Kürzeln
-        df['n_groesse'] = df.apply(
-            lambda row: get_packungsgroesse_with_beschreibung(
-                row['packungsgroesse'] if pd.notna(row['packungsgroesse']) else 0,
-                row['darreichungsform'] if pd.notna(row['darreichungsform']) else ''
-            ), axis=1
-        )
+        # N-Größe berechnen mit Original-Kürzeln und Emoji hinzufügen
+        def format_n_groesse(row):
+            pkg = row['packungsgroesse'] if pd.notna(row['packungsgroesse']) else 0
+            dform = row['darreichungsform'] if pd.notna(row['darreichungsform']) else ''
+
+            n_text = get_packungsgroesse_with_beschreibung(pkg, dform)
+            if not n_text:
+                return ""
+
+            # Extract N-Größe (N1, N2, N3) from text
+            n_size = n_text.split()[0]  # "N3" from "N3 (Großpackung)"
+            emoji = get_packungsgroesse_emoji(n_size)
+
+            return f"{emoji} {n_text}" if emoji else n_text
+
+        df['n_groesse'] = df.apply(format_n_groesse, axis=1)
 
         # Spalte nach packungsgroesse verschieben
         cols = list(df.columns)
@@ -136,7 +149,7 @@ def search_medications(query, search_type="all", limit=50):
 
 
 def search_function(searchterm: str):
-    """Searchbox callback function that returns suggestions."""
+    """Searchbox callback function that returns suggestions with N-Größe."""
     if not searchterm or len(searchterm) < 2:
         return []
 
@@ -149,44 +162,75 @@ def search_function(searchterm: str):
     try:
         if search_type == "pzn":
             cursor.execute("""
-                SELECT DISTINCT pzn || ' - ' || arzneimittelname as suggestion
+                SELECT DISTINCT pzn, arzneimittelname, packungsgroesse, darreichungsform, preis
                 FROM medications
                 WHERE pzn LIKE ?
                 ORDER BY pzn ASC
                 LIMIT 15
             """, (f'{searchterm}%',))
+            results = []
+            for row in cursor.fetchall():
+                pzn, name, pkg, dform, preis = row
+                n_size = get_packungsgroesse_n(pkg, dform) if pkg and dform else ""
+                n_tag = f" [{n_size}]" if n_size else ""
+                results.append(f"{pzn} - {name}{n_tag} - {preis:.2f}€")
+            return results
+
         elif search_type == "name":
             cursor.execute("""
-                SELECT DISTINCT arzneimittelname || ' (' || wirkstoff || ')' as suggestion
+                SELECT DISTINCT arzneimittelname, wirkstoff, packungsgroesse, darreichungsform, preis
                 FROM medications
                 WHERE arzneimittelname LIKE ?
                 ORDER BY arzneimittelname ASC
                 LIMIT 15
             """, (f'%{searchterm.upper()}%',))
+            results = []
+            for row in cursor.fetchall():
+                name, wirkstoff, pkg, dform, preis = row
+                n_size = get_packungsgroesse_n(pkg, dform) if pkg and dform else ""
+                n_tag = f" [{n_size}]" if n_size else ""
+                results.append(f"{name} ({wirkstoff}){n_tag} - {preis:.2f}€")
+            return results
+
         elif search_type == "wirkstoff":
             cursor.execute("""
-                SELECT DISTINCT wirkstoff as suggestion
+                SELECT DISTINCT wirkstoff
                 FROM medications
                 WHERE wirkstoff LIKE ?
                 ORDER BY wirkstoff ASC
                 LIMIT 15
             """, (f'%{searchterm}%',))
+            results = [row[0] for row in cursor.fetchall()]
+            return results
+
         else:  # all
             cursor.execute("""
                 SELECT DISTINCT
+                    pzn, arzneimittelname, wirkstoff, packungsgroesse, darreichungsform, preis,
                     CASE
-                        WHEN pzn LIKE ? THEN pzn || ' - ' || arzneimittelname
-                        WHEN arzneimittelname LIKE ? THEN arzneimittelname || ' (' || wirkstoff || ')'
-                        ELSE wirkstoff
-                    END as suggestion
+                        WHEN pzn LIKE ? THEN 1
+                        WHEN arzneimittelname LIKE ? THEN 2
+                        ELSE 3
+                    END as match_type
                 FROM medications
                 WHERE pzn LIKE ? OR arzneimittelname LIKE ? OR wirkstoff LIKE ?
-                ORDER BY suggestion ASC
+                ORDER BY match_type ASC, arzneimittelname ASC
                 LIMIT 15
             """, (f'{searchterm}%', f'%{searchterm.upper()}%', f'{searchterm}%', f'%{searchterm.upper()}%', f'%{searchterm}%'))
 
-        results = [row[0] for row in cursor.fetchall()]
-        return results
+            results = []
+            for row in cursor.fetchall():
+                pzn, name, wirkstoff, pkg, dform, preis, match_type = row
+                n_size = get_packungsgroesse_n(pkg, dform) if pkg and dform else ""
+                n_tag = f" [{n_size}]" if n_size else ""
+
+                if match_type == 1:  # PZN match
+                    results.append(f"{pzn} - {name}{n_tag} - {preis:.2f}€")
+                elif match_type == 2:  # Name match
+                    results.append(f"{name} ({wirkstoff}){n_tag} - {preis:.2f}€")
+                else:  # Wirkstoff match
+                    results.append(wirkstoff)
+            return results
     finally:
         conn.close()
 
